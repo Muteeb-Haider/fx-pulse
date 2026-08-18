@@ -10,7 +10,7 @@ from fxpulse.config import WiseCredentials
 
 @respx.mock
 def test_get_reference_rate_uses_bearer_auth_and_unwraps_list(wise_credentials: WiseCredentials) -> None:
-    route = respx.get("https://api.sandbox.transferwise.tech/v1/rates").mock(
+    route = respx.get("https://api.wise-sandbox.com/v1/rates").mock(
         return_value=httpx.Response(200, json=[{"rate": 1.15, "source": "GBP", "target": "EUR", "time": "x"}])
     )
 
@@ -26,7 +26,7 @@ def test_get_reference_rate_uses_bearer_auth_and_unwraps_list(wise_credentials: 
 
 @respx.mock
 def test_get_temporary_quote_sends_fixed_rate_type(wise_credentials: WiseCredentials) -> None:
-    route = respx.get("https://api.sandbox.transferwise.tech/v1/quotes").mock(
+    route = respx.get("https://api.wise-sandbox.com/v1/quotes").mock(
         return_value=httpx.Response(200, json={"rate": 1.14, "fee": 5.0, "targetAmount": 1135.0})
     )
 
@@ -41,7 +41,7 @@ def test_get_temporary_quote_sends_fixed_rate_type(wise_credentials: WiseCredent
 
 @respx.mock
 def test_raises_rate_limit_error_on_429(wise_credentials: WiseCredentials) -> None:
-    respx.get("https://api.sandbox.transferwise.tech/v1/rates").mock(
+    respx.get("https://api.wise-sandbox.com/v1/rates").mock(
         return_value=httpx.Response(429, headers={"Retry-After": "30"}, json={"message": "slow down"})
     )
 

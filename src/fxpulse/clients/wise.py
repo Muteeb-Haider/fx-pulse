@@ -12,11 +12,17 @@ API (see https://github.com/transferwise/api-docs):
 The gap between the two is the transfer's effective markup, which is
 what fxpulse's analytics layer reports on.
 
-NOTE: verify exact response field names against your own Wise sandbox
-account (register at https://sandbox.transferwise.tech/) — Wise's
-interactive docs are JS-rendered and couldn't be scraped directly
-while building this, so these shapes are taken from Wise's public
-api-docs repo and may drift slightly from the live sandbox response.
+Points at Wise's Sandbox V2 (`api.wise-sandbox.com`) — V1
+(`api.sandbox.transferwise.tech`) was retired. Register a V2 test
+account at https://wise-sandbox.com/register and create a Personal
+Token from Settings -> API tokens.
+
+NOTE: verify exact response field names against your own sandbox
+account — Wise's interactive docs are JS-rendered and couldn't be
+scraped directly while building this, so these shapes are taken from
+Wise's public api-docs repo and may drift slightly from the live
+response. Wise's migration notes say V1's endpoint shapes carried over
+unchanged to V2, so this should still be accurate.
 """
 
 from __future__ import annotations

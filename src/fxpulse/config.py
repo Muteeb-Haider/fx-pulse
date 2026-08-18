@@ -67,7 +67,7 @@ class WiseCredentials:
 
     @property
     def base_url(self) -> str:
-        return "https://api.sandbox.transferwise.tech" if self.sandbox else "https://api.wise.com"
+        return "https://api.wise-sandbox.com" if self.sandbox else "https://api.wise.com"
 
 
 def load_wise_credentials() -> WiseCredentials | None:

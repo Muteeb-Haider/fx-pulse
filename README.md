@@ -59,18 +59,18 @@ pip install -e ".[dev]"
 
 fx-pulse reads the same config file `revolut-x-api`'s CLI writes:
 `%APPDATA%\revolut-x\config.json` + `private.pem` (Windows) or `~/.config/revolut-x/` (macOS/Linux).
-Run `revx auth setup` once (from `revolut-x-api`) and both tools share the same registered key.
+Run `revx configure` once (from `revolut-x-api`) and both tools share the same registered key.
 
 **3. Wise sandbox credentials**
 
-Register a free sandbox account at [sandbox.transferwise.tech](https://sandbox.transferwise.tech/), create a Personal Token, then:
+Register a free **Sandbox V2** test account at [wise-sandbox.com/register](https://wise-sandbox.com/register) (Wise retired the old V1 sandbox at `sandbox.transferwise.tech` in 2026 — this project targets V2, `api.wise-sandbox.com`), then create a Personal Token from **Settings → API tokens**:
 
 ```bash
 cp .env.example .env
 # edit .env: set WISE_API_TOKEN
 ```
 
-> The Wise client's endpoint shapes (`/v1/rates`, `/v1/quotes`) come from Wise's public [api-docs repo](https://github.com/transferwise/api-docs) — their interactive docs site is a JS SPA I couldn't scrape directly while building this. Sanity-check response field names against your own sandbox account; `WiseClient` stores whatever it gets and `transform.fx_quote_from_raw` falls back to the `paymentOptions[0]` shape if the top-level `rate`/`fee`/`targetAmount` fields aren't present, so small drift shouldn't be fatal.
+> The Wise client's endpoint shapes (`/v1/rates`, `/v1/quotes`) come from Wise's public [api-docs repo](https://github.com/transferwise/api-docs) — their interactive docs site is a JS SPA I couldn't scrape directly while building this. Wise's own V2 migration notes say endpoint shapes carried over unchanged from V1, but sanity-check response field names against your own sandbox account regardless; `WiseClient` stores whatever it gets and `transform.fx_quote_from_raw` falls back to the `paymentOptions[0]` shape if the top-level `rate`/`fee`/`targetAmount` fields aren't present, so small drift shouldn't be fatal.
 
 **4. Database**
 
