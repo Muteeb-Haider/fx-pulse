@@ -1,28 +1,40 @@
-"""Wise Platform API client (rates + temporary quotes).
+"""Wise Platform API client (rates + quotes).
 
-Uses two read-only, no-profile-required endpoints from Wise's public
-API (see https://github.com/transferwise/api-docs):
+Two calls, both verified live against a real Wise Sandbox V2 account
+while building this (see notes below — the public docs describe an
+older, no-longer-working flow):
 
 - `GET /v1/rates` returns Wise's reference (mid-market) exchange rate
-  for a currency pair — this is the benchmark.
-- `GET /v1/quotes` ("temporary quote", no `profile` needed) returns
-  what a customer would actually pay to convert/send that amount,
-  including the fee breakdown — this is the real cost.
+  for a currency pair — this is the benchmark. Confirmed working with
+  just a Bearer Personal Token, response shape
+  `{"rate": ..., "source": ..., "target": ..., "time": ...}`.
+- `POST /v3/quotes` (with a `profileId`) returns what a customer would
+  actually pay to convert/send that amount, across several payment
+  options (bank transfer, card, etc.) each with their own fee
+  breakdown — this is the real cost. The top-level `rate` field on
+  this response is *also* just the mid-market rate, not the customer's
+  effective rate — that has to be derived per payment option as
+  `targetAmount / sourceAmount`.
 
-The gap between the two is the transfer's effective markup, which is
+The gap between the mid-market rate and a payment option's effective
+rate (plus its explicit fee) is the transfer's real cost, which is
 what fxpulse's analytics layer reports on.
 
 Points at Wise's Sandbox V2 (`api.wise-sandbox.com`) — V1
 (`api.sandbox.transferwise.tech`) was retired. Register a V2 test
 account at https://wise-sandbox.com/register and create a Personal
-Token from Settings -> API tokens.
+Token from your account's "Connect and manage apps" -> API tokens
+(needs 2-step verification enabled first; sandbox 2FA code is always
+`111111`).
 
-NOTE: verify exact response field names against your own sandbox
-account — Wise's interactive docs are JS-rendered and couldn't be
-scraped directly while building this, so these shapes are taken from
-Wise's public api-docs repo and may drift slightly from the live
-response. Wise's migration notes say V1's endpoint shapes carried over
-unchanged to V2, so this should still be accurate.
+NOTE ON THE DOCS: Wise's public api-docs repo (and their JS-rendered
+interactive docs, which couldn't be scraped directly while building
+this) describe a `GET /v1/quotes` "temporary quote" endpoint that
+needs no profile. Against a real Sandbox V2 account that endpoint
+returned `401 {"errors":[{"code":"error.quote.mustBeAuthenticated",...}]}`
+even with a valid Bearer token — empirically, quotes now require an
+authenticated `POST /v3/quotes` with a real `profileId`. This client
+reflects what was actually observed working, not what the docs say.
 """
 
 from __future__ import annotations
@@ -42,6 +54,7 @@ class WiseClient:
             timeout=timeout,
             headers={"Authorization": f"Bearer {credentials.api_token}"},
         )
+        self._profile_id: int | None = None
 
     def close(self) -> None:
         self._client.close()
@@ -57,6 +70,11 @@ class WiseClient:
         self._raise_for_status(response)
         return response.json()
 
+    def _post(self, path: str, json_body: dict[str, Any]) -> Any:
+        response = self._client.post(f"{self._base_url}{path}", json=json_body)
+        self._raise_for_status(response)
+        return response.json()
+
     @staticmethod
     def _raise_for_status(response: httpx.Response) -> None:
         if response.is_success:
@@ -64,8 +82,12 @@ class WiseClient:
         message = f"HTTP {response.status_code}"
         try:
             body = response.json()
-            if isinstance(body, dict) and body.get("message"):
-                message = body["message"]
+            if isinstance(body, dict):
+                errors = body.get("errors")
+                if isinstance(errors, list) and errors and errors[0].get("message"):
+                    message = errors[0]["message"]
+                elif body.get("message"):
+                    message = body["message"]
         except ValueError:
             pass
 
@@ -85,22 +107,27 @@ class WiseClient:
             return cast(dict[str, Any], result[0])
         return cast(dict[str, Any], result)
 
-    def get_temporary_quote(
-        self,
-        source: str,
-        target: str,
-        source_amount: float,
-    ) -> dict[str, Any]:
-        """What a customer actually pays: quoted rate + fee breakdown."""
+    def _get_profile_id(self) -> int:
+        if self._profile_id is None:
+            profiles = self._get("/v2/profiles", {})
+            if not profiles:
+                raise ApiError("Wise account has no profiles to quote against")
+            self._profile_id = cast(int, profiles[0]["id"])
+        return self._profile_id
+
+    def get_quote(self, source: str, target: str, source_amount: float) -> dict[str, Any]:
+        """A real, profile-scoped quote: several payment options, each with its
+        own effective rate and fee breakdown (see module docstring)."""
+        profile_id = self._get_profile_id()
         return cast(
             dict[str, Any],
-            self._get(
-                "/v1/quotes",
+            self._post(
+                "/v3/quotes",
                 {
-                    "source": source,
-                    "target": target,
+                    "profileId": profile_id,
+                    "sourceCurrency": source,
+                    "targetCurrency": target,
                     "sourceAmount": source_amount,
-                    "rateType": "FIXED",
                 },
             ),
         )

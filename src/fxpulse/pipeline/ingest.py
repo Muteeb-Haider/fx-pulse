@@ -60,7 +60,7 @@ def ingest_fx_quotes(
     quotes: list[FxQuote] = []
     for source, target, amount in pairs or DEFAULT_FX_PAIRS:
         rate_response = client.get_reference_rate(source, target)
-        quote_response = client.get_temporary_quote(source, target, amount)
+        quote_response = client.get_quote(source, target, amount)
         quotes.append(fx_quote_from_raw(source, target, amount, rate_response, quote_response))
 
     insert_fx_quotes(cursor, quotes)

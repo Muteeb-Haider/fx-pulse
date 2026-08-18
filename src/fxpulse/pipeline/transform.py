@@ -29,31 +29,35 @@ def fx_quote_from_raw(
     rate_response: dict[str, Any],
     quote_response: dict[str, Any],
 ) -> FxQuote:
+    """Build an FxQuote from a Wise `/v1/rates` response (the mid-market
+    benchmark) and a `/v3/quotes` response (the real, profile-scoped quote).
+
+    The quote response's own top-level `rate` field is *also* just the
+    mid-market rate, not what the customer actually gets — that only
+    shows up per payment option, as `targetAmount / sourceAmount`. This
+    picks the first payment option (Wise's own default/cheapest pick,
+    typically a bank-transfer payout) as "the" quote.
+    """
     mid_market_rate = rate_response["rate"]
 
-    quoted_rate = quote_response.get("rate")
-    fee = quote_response.get("fee")
-    target_amount = quote_response.get("targetAmount")
+    payment_options = quote_response.get("paymentOptions") or []
+    if not payment_options:
+        raise ValueError(f"Quote response has no payment options: {quote_response!r}")
+    option = payment_options[0]
 
-    if quoted_rate is None or fee is None or target_amount is None:
-        payment_options = quote_response.get("paymentOptions") or []
-        if not payment_options:
-            raise ValueError(f"Quote response missing rate/fee/targetAmount: {quote_response!r}")
-        option = payment_options[0]
-        if quoted_rate is None:
-            quoted_rate = option.get("rate", mid_market_rate)
-        if fee is None:
-            fee = option.get("fee", {}).get("total", 0)
-        if target_amount is None:
-            target_amount = option.get("targetAmount")
+    option_source_amount = Decimal(str(option["sourceAmount"]))
+    target_amount = Decimal(str(option["targetAmount"]))
+    quoted_rate = target_amount / option_source_amount
+    fee = option["fee"]["total"]
+    fee_currency = option.get("sourceCurrency", source_currency)
 
     return FxQuote(
         source_currency=source_currency,
         target_currency=target_currency,
         source_amount=Decimal(str(source_amount)),
         mid_market_rate=Decimal(str(mid_market_rate)),
-        quoted_rate=Decimal(str(quoted_rate)),
+        quoted_rate=quoted_rate,
         fee_amount=Decimal(str(fee)),
-        fee_currency=quote_response.get("feeCurrency", source_currency),
-        target_amount=Decimal(str(target_amount)),
+        fee_currency=fee_currency,
+        target_amount=target_amount,
     )

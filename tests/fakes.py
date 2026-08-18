@@ -44,6 +44,17 @@ class FakeWiseClient:
         self.rate_calls.append((source, target))
         return {"rate": 1.15, "source": source, "target": target}
 
-    def get_temporary_quote(self, source: str, target: str, source_amount: float) -> dict[str, Any]:
+    def get_quote(self, source: str, target: str, source_amount: float) -> dict[str, Any]:
         self.quote_calls.append((source, target, source_amount))
-        return {"rate": 1.145, "fee": 5.0, "targetAmount": source_amount * 1.14, "feeCurrency": source}
+        return {
+            "rate": 1.15,
+            "paymentOptions": [
+                {
+                    "sourceAmount": source_amount,
+                    "targetAmount": source_amount * 1.14,
+                    "sourceCurrency": source,
+                    "targetCurrency": target,
+                    "fee": {"total": 5.0},
+                }
+            ],
+        }

@@ -40,35 +40,44 @@ def test_candles_from_raw_converts_ms_epoch_to_datetime() -> None:
     assert candles[0].start.timestamp() == 1_700_000_000
 
 
-def test_fx_quote_from_raw_direct_fields() -> None:
-    rate_response = {"rate": 1.15, "source": "GBP", "target": "EUR", "time": "2026-01-01T00:00:00Z"}
-    quote_response = {"rate": 1.145, "fee": 5.0, "targetAmount": 1140.0, "feeCurrency": "GBP"}
+def test_fx_quote_from_raw_derives_effective_rate_from_first_payment_option() -> None:
+    """Mirrors a real Wise Sandbox V2 /v3/quotes response: the top-level `rate`
+    is just the mid-market rate again, and the customer's actual effective
+    rate has to be derived from a payment option's targetAmount/sourceAmount."""
+    rate_response = {"rate": 1.16975, "source": "GBP", "target": "EUR", "time": "2026-01-01T00:00:00Z"}
+    quote_response = {
+        "rate": 1.16976,  # also mid-market, NOT the customer's rate
+        "paymentOptions": [
+            {
+                "sourceAmount": 1000.0,
+                "targetAmount": 1165.22,
+                "sourceCurrency": "GBP",
+                "targetCurrency": "EUR",
+                "fee": {"total": 3.88},
+            },
+            {
+                "sourceAmount": 1000.0,
+                "targetAmount": 1161.51,
+                "sourceCurrency": "GBP",
+                "targetCurrency": "EUR",
+                "fee": {"total": 7.05},
+            },
+        ],
+    }
 
     quote = fx_quote_from_raw("GBP", "EUR", 1000.0, rate_response, quote_response)
 
     assert quote.source_currency == "GBP"
     assert quote.target_currency == "EUR"
-    assert quote.mid_market_rate == Decimal("1.15")
-    assert quote.quoted_rate == Decimal("1.145")
-    assert quote.fee_amount == Decimal("5.0")
+    assert quote.mid_market_rate == Decimal("1.16975")
+    assert quote.target_amount == Decimal("1165.22")
+    assert quote.fee_amount == Decimal("3.88")
+    assert quote.fee_currency == "GBP"
+    # first payment option only, not the second
+    assert quote.quoted_rate == Decimal("1165.22") / Decimal("1000.0")
     assert quote.markup_bps > 0  # quoted rate is worse than mid-market -> positive markup
 
 
-def test_fx_quote_from_raw_falls_back_to_payment_options() -> None:
-    rate_response = {"rate": 1.15}
-    quote_response = {
-        "paymentOptions": [
-            {"rate": 1.14, "fee": {"total": 6.5}, "targetAmount": 1130.0},
-        ]
-    }
-
-    quote = fx_quote_from_raw("GBP", "EUR", 1000.0, rate_response, quote_response)
-
-    assert quote.quoted_rate == Decimal("1.14")
-    assert quote.fee_amount == Decimal("6.5")
-    assert quote.target_amount == Decimal("1130.0")
-
-
-def test_fx_quote_from_raw_raises_when_no_usable_fields() -> None:
-    with pytest.raises(ValueError, match="missing rate/fee/targetAmount"):
-        fx_quote_from_raw("GBP", "EUR", 1000.0, {"rate": 1.15}, {})
+def test_fx_quote_from_raw_raises_when_no_payment_options() -> None:
+    with pytest.raises(ValueError, match="no payment options"):
+        fx_quote_from_raw("GBP", "EUR", 1000.0, {"rate": 1.15}, {"paymentOptions": []})
