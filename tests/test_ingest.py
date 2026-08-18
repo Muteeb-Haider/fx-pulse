@@ -58,3 +58,32 @@ def test_run_full_ingestion_reports_counts_per_source() -> None:
     )
 
     assert counts == {"tickers": 1, "candles": 1, "fx_quotes": 1}
+
+
+def test_run_full_ingestion_skips_revolut_when_client_is_none() -> None:
+    wise_client = FakeWiseClient()
+    cursor = FakeCursor()
+
+    counts = run_full_ingestion(
+        None,
+        wise_client,
+        cursor,
+        fx_pairs=[("GBP", "EUR", 1000.0)],
+    )
+
+    assert counts == {"tickers": 0, "candles": 0, "fx_quotes": 1}
+    assert cursor.executemany_calls  # only the fx_quotes insert happened
+
+
+def test_run_full_ingestion_skips_wise_when_client_is_none() -> None:
+    revolut_client = FakeRevolutClient()
+    cursor = FakeCursor()
+
+    counts = run_full_ingestion(
+        revolut_client,
+        None,
+        cursor,
+        crypto_symbols=["BTC-USD"],
+    )
+
+    assert counts == {"tickers": 1, "candles": 1, "fx_quotes": 0}

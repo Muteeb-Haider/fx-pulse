@@ -37,21 +37,29 @@ def init_db() -> None:
     help="SOURCE:TARGET:AMOUNT, e.g. GBP:EUR:1000 (repeatable).",
 )
 def run(symbols: tuple[str, ...], fx_pairs: tuple[str, ...]) -> None:
-    """Run one ingestion pass: fetch market data + FX quotes, write to Postgres."""
+    """Run one ingestion pass: fetch market data + FX quotes, write to Postgres.
+
+    Each source (Revolut X, Wise) only runs if its credentials are
+    configured — missing one just skips that source with a warning,
+    rather than blocking the other. It's only an error if neither is
+    configured, since then there's nothing to ingest.
+    """
     revolutx_creds = load_revolutx_credentials()
     wise_creds = load_wise_credentials()
 
     if revolutx_creds is None:
         click.echo(
-            "No Revolut X credentials found. Run `revx auth setup` (revolut-x-api CLI) first.",
+            "No Revolut X credentials found (run `revx configure` to set up) "
+            "- skipping crypto market data.",
             err=True,
         )
-        sys.exit(1)
     if wise_creds is None:
         click.echo(
-            "No Wise credentials found. Set WISE_API_TOKEN in your environment or .env file.",
+            "No Wise credentials found (set WISE_API_TOKEN in .env) - skipping FX quotes.",
             err=True,
         )
+    if revolutx_creds is None and wise_creds is None:
+        click.echo("Neither source is configured - nothing to do.", err=True)
         sys.exit(1)
 
     parsed_pairs = None
@@ -62,19 +70,22 @@ def run(symbols: tuple[str, ...], fx_pairs: tuple[str, ...]) -> None:
             parsed_pairs.append((source, target, float(amount)))
 
     db_config = load_database_config()
-    with (
-        RevolutXMarketDataClient(revolutx_creds) as revolut_client,
-        WiseClient(wise_creds) as wise_client,
-        connect(db_config) as conn,
-        conn.cursor() as cursor,
-    ):
-        counts = run_full_ingestion(
-            revolut_client,
-            wise_client,
-            cursor,
-            crypto_symbols=list(symbols) or None,
-            fx_pairs=parsed_pairs,
-        )
+    with connect(db_config) as conn, conn.cursor() as cursor:
+        revolut_client = RevolutXMarketDataClient(revolutx_creds) if revolutx_creds else None
+        wise_client = WiseClient(wise_creds) if wise_creds else None
+        try:
+            counts = run_full_ingestion(
+                revolut_client,
+                wise_client,
+                cursor,
+                crypto_symbols=list(symbols) or None,
+                fx_pairs=parsed_pairs,
+            )
+        finally:
+            if revolut_client is not None:
+                revolut_client.close()
+            if wise_client is not None:
+                wise_client.close()
     click.echo(f"Ingestion complete: {counts}")
 
 

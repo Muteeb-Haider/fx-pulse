@@ -69,16 +69,26 @@ def ingest_fx_quotes(
 
 
 def run_full_ingestion(
-    revolut_client: RevolutXMarketDataClient,
-    wise_client: WiseClient,
+    revolut_client: RevolutXMarketDataClient | None,
+    wise_client: WiseClient | None,
     cursor: Any,
     crypto_symbols: list[str] | None = None,
     fx_pairs: list[tuple[str, str, float]] | None = None,
 ) -> dict[str, int]:
-    ticker_count = ingest_crypto_tickers(revolut_client, cursor, crypto_symbols)
-    candle_count = sum(
-        ingest_crypto_candles(revolut_client, cursor, symbol)
-        for symbol in (crypto_symbols or DEFAULT_CRYPTO_SYMBOLS)
-    )
-    quote_count = ingest_fx_quotes(wise_client, cursor, fx_pairs)
+    """Ingest from whichever sources have a client. Either client may be
+    `None` — e.g. to run only the Wise half when Revolut X credentials
+    aren't set up yet — in which case that source's counts are 0."""
+    ticker_count = 0
+    candle_count = 0
+    if revolut_client is not None:
+        ticker_count = ingest_crypto_tickers(revolut_client, cursor, crypto_symbols)
+        candle_count = sum(
+            ingest_crypto_candles(revolut_client, cursor, symbol)
+            for symbol in (crypto_symbols or DEFAULT_CRYPTO_SYMBOLS)
+        )
+
+    quote_count = 0
+    if wise_client is not None:
+        quote_count = ingest_fx_quotes(wise_client, cursor, fx_pairs)
+
     return {"tickers": ticker_count, "candles": candle_count, "fx_quotes": quote_count}
