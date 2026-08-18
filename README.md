@@ -11,7 +11,7 @@ The gap between those two Wise numbers — the *quoted rate* vs. the *mid-market
 
 ## Why this exists
 
-I'd already contributed a [bug fix](https://github.com/revolut-engineering/revolut-x-api/pull/78) and a [feature](https://github.com/revolut-engineering/revolut-x-api/pull/77) to Revolut's open-source `revolut-x-api`. This project extends that work in a direction relevant to graduate applications at both Revolut and Wise:
+I'd already contributed a [bug fix](https://github.com/revolut-engineering/revolut-x-api/pull/78) and a [feature](https://github.com/revolut-engineering/revolut-x-api/pull/77) to Revolut's open-source `revolut-x-api`. This project extends that work 
 
 - It reuses `revolut-x-api`'s exact Ed25519 request-signing scheme, reimplemented in Python (see [`fxpulse/auth/signer.py`](src/fxpulse/auth/signer.py)) — same registered API key and keypair, two languages.
 - It's a Python/SQL/Postgres data pipeline, matching what Revolut's Graduate Programme (Python track) actually asks for: "building well-designed, scalable APIs" and "creating data pipelines to support reporting, analytics, and data science."
