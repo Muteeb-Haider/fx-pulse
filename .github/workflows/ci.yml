@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type-check (mypy --strict)
+        run: mypy src
+
+      - name: Test (pytest)
+        run: pytest -v
+
+  schema-check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fxpulse
+          POSTGRES_PASSWORD: fxpulse
+          POSTGRES_DB: fxpulse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U fxpulse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply schema.sql against a throwaway Postgres
+        run: |
+          PGPASSWORD=fxpulse psql -h localhost -U fxpulse -d fxpulse \
+            -f src/fxpulse/db/schema.sql
