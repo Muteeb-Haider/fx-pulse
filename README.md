@@ -70,7 +70,7 @@ cp .env.example .env
 # edit .env: set WISE_API_TOKEN
 ```
 
-> The Wise client's endpoint shapes (`/v1/rates`, `/v1/quotes`) come from Wise's public [api-docs repo](https://github.com/transferwise/api-docs) — their interactive docs site is a JS SPA I couldn't scrape directly while building this. Wise's own V2 migration notes say endpoint shapes carried over unchanged from V1, but sanity-check response field names against your own sandbox account regardless; `WiseClient` stores whatever it gets and `transform.fx_quote_from_raw` falls back to the `paymentOptions[0]` shape if the top-level `rate`/`fee`/`targetAmount` fields aren't present, so small drift shouldn't be fatal.
+> **On the docs vs. reality**: Wise's public docs describe a `GET /v1/quotes` "temporary quote" that needs no profile. Against a real Sandbox V2 account that returned `401 error.quote.mustBeAuthenticated` even with a valid token — quotes actually require an authenticated `POST /v3/quotes` with a `profileId` (fetched from `GET /v2/profiles` and cached by `WiseClient`). The response's own top-level `rate` field is also just the mid-market rate again, not what you'd actually get — the effective rate has to be derived per payment option as `targetAmount / sourceAmount`. `WiseClient` and `transform.fx_quote_from_raw` reflect what was verified working live, not what the docs say — see the docstring in [`fxpulse/clients/wise.py`](src/fxpulse/clients/wise.py) for the full story.
 
 **4. Database**
 
@@ -97,7 +97,7 @@ SELECT * FROM crypto_volatility_daily ORDER BY day DESC LIMIT 10;
 ## Testing
 
 ```bash
-pytest -v      # 28 tests
+pytest -v      # 29 tests
 ruff check .   # lint
 mypy src       # strict type checking
 ```
@@ -113,6 +113,6 @@ src/fxpulse/
   pipeline/       transform (pure) + ingest (orchestration)
   db/             schema.sql + repository (plain SQL, no ORM)
   cli.py          `fxpulse init-db` / `fxpulse run`
-tests/            28 tests: signer, transform, models, both clients, repository, ingest
+tests/            29 tests: signer, transform, models, both clients, repository, ingest
 .github/workflows/ci.yml   lint + typecheck + tests, plus a schema-apply check against real Postgres
 ```
